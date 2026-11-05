@@ -338,17 +338,14 @@ async function lookupBarcode(code){
   // remembered on this phone
   const local = await DB.get("barcodes", code);
   if (local) return {name:local.name, brand:local.brand, category:local.category, source:"remembered"};
+  // Stash lookup (Cloudflare middleman that asks UPCitemdb)
+  const w = await fetchJSON(`https://stash-lookup.vivaanpoddar161.workers.dev/?upc=${encodeURIComponent(code)}`, 8000);
+  if (w && w.found && w.name) return {name:w.name, brand:w.brand || "", source:"product database"};
   // Open Products Facts (free, open database)
   const opf = await fetchJSON(`https://world.openproductsfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
   if (opf && opf.status === 1 && opf.product) {
     const p = opf.product; const name = p.product_name || p.generic_name || "";
     if (name) return {name, brand:(p.brands || "").split(",")[0].trim(), source:"open database"};
-  }
-  // UPCitemdb free trial (about 100 lookups a day)
-  const upc = await fetchJSON(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
-  if (upc && upc.items && upc.items[0]) {
-    const p = upc.items[0];
-    return {name:p.title || "", brand:p.brand || "", source:"product database"};
   }
   return null;
 }
