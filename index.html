@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Stash</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#2438c9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stash">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-column phone app. Sticky header (name, count, big "do I have it?" search),
+   category chips, a grid of supply cards, a floating add button, and bottom sheets for adding/editing. */
+:root{
+  --paper:#f4f4f1; --surface:#ffffff; --sunk:#ecece7; --ink:#15161a; --muted:#686a72; --line:#deded8;
+  --accent:#2438c9; --accent-ink:#ffffff; --accent-soft:#e6e9fb; --low:#c2410c; --low-soft:#fdeee5; --ok:#15803d;
+  --shadow:0 1px 2px rgba(20,22,30,.06),0 6px 20px rgba(20,22,30,.06);
+  --display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#111215; --surface:#1a1b1f; --sunk:#222328; --ink:#ecece8; --muted:#9a9ca4; --line:#2c2e34;
+  --accent:#8191ff; --accent-ink:#0d0f1a; --accent-soft:#232848; --low:#fb923c; --low-soft:#3a2416; --ok:#4ade80;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.3); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#111215; --surface:#1a1b1f; --sunk:#222328; --ink:#ecece8; --muted:#9a9ca4; --line:#2c2e34;
+  --accent:#8191ff; --accent-ink:#0d0f1a; --accent-soft:#232848; --low:#fb923c; --low-soft:#3a2416; --ok:#4ade80;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.3); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--paper);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:760px;margin:0 auto;padding-block:8px 120px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);padding-block:14px 10px;display:flex;flex-direction:column;gap:12px}
+.brandrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.brand{font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:-.02em;margin:0}
+.brand span{color:var(--accent)}
+.count{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.02em;white-space:nowrap}
+.menu-btn{border:0;background:transparent;padding:6px;border-radius:8px;color:var(--muted)}
+.search{position:relative}
+.search input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:13px 14px 13px 42px;font-size:16px}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline:-2px;padding:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chip.low[aria-pressed="true"]{background:var(--low);border-color:var(--low);color:#fff}
+.chip .n{font-family:var(--mono);font-size:11px;opacity:.6;margin-left:4px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;text-align:left;padding:0;display:flex;flex-direction:column;box-shadow:var(--shadow);min-width:0}
+.card .ph{aspect-ratio:1/1;background:var(--sunk);position:relative;display:grid;place-items:center;overflow:hidden}
+.card .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.card .ph .code{font-family:var(--mono);font-size:22px;color:var(--muted);letter-spacing:.04em}
+.card .sw{position:absolute;left:10px;bottom:10px;width:22px;height:22px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
+.card .lowtag{position:absolute;right:8px;top:8px;background:var(--low);color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
+.card .qty{position:absolute;right:8px;bottom:8px;background:var(--surface);font-family:var(--mono);font-size:12px;padding:2px 7px;border-radius:999px;border:1px solid var(--line)}
+.card .meta{padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.card .name{font-weight:600;font-size:14px;line-height:1.25;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .where{margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+
+.empty{margin:48px auto;max-width:34ch;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:10px;align-items:center}
+.empty h2{font-family:var(--display);color:var(--ink);font-size:22px;margin:0;text-wrap:balance}
+.empty .swatches{display:flex;gap:6px;margin-bottom:6px}
+.empty .swatches i{width:28px;height:40px;border-radius:6px;display:block}
+
+.fab{position:fixed;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:6;border:0;background:var(--accent);color:var(--accent-ink);
+  border-radius:999px;padding:15px 22px 15px 18px;font-weight:600;font-size:16px;display:flex;gap:8px;align-items:center;box-shadow:0 8px 24px rgba(36,56,201,.35)}
+
+/* sheets */
+.scrim{position:fixed;inset:0;background:rgba(10,11,15,.42);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:760px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
+  padding:10px max(18px,env(safe-area-inset-right,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));animation:up .22s ease}
+@keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--line);margin:4px auto 14px}
+.sheet h3{font-family:var(--display);font-size:22px;margin:0 0 4px}
+.sheet p.hint{color:var(--muted);margin:0 0 16px;font-size:14px}
+.ways{display:grid;gap:10px}
+.way{display:flex;gap:14px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:var(--r);padding:14px}
+.way .ic{width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.way b{display:block;font-size:15px}
+.way small{color:var(--muted);font-size:13px}
+
+form.edit{display:flex;flex-direction:column;gap:14px}
+.photo-row{display:flex;gap:12px;align-items:center}
+.photo{width:96px;height:96px;border-radius:12px;background:var(--sunk);overflow:hidden;flex:none;display:grid;place-items:center;color:var(--muted);border:1px dashed var(--line)}
+.photo img{width:100%;height:100%;object-fit:cover}
+.photo-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500;color:var(--muted)}
+label.f input,label.f select,label.f textarea{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:11px 12px;font-size:16px;color:var(--ink);width:100%;min-width:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--paper)}
+.stepper button{border:0;background:transparent;width:42px;height:44px;font-size:20px}
+.stepper output{min-width:34px;text-align:center;font-family:var(--mono)}
+.toggle{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500}
+.toggle input{width:20px;height:20px;accent-color:var(--low)}
+.swatch-row{display:flex;gap:8px;align-items:center}
+.swatch-row input[type=color]{width:46px;height:44px;padding:2px;border-radius:10px;border:1px solid var(--line);background:var(--paper)}
+.read{background:var(--accent-soft);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.read b{font-size:13px}
+.read .lines{display:flex;flex-wrap:wrap;gap:6px}
+.read .lines button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 9px;font-size:13px;text-align:left;max-width:100%;overflow-wrap:anywhere}
+.notice{border-radius:12px;padding:12px 14px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+.notice.dupe{background:var(--low-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--low) 35%,transparent)}
+.notice.dupe b{color:var(--low)}
+.notice.info{background:var(--sunk);color:var(--muted)}
+.btns{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:6px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 18px;font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);padding-inline:6px}
+.btn.danger{color:var(--low);border-color:transparent;background:transparent;padding-inline:6px}
+.btn.small{padding:7px 12px;font-size:13px;border-radius:9px}
+.busy{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px}
+.spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:14px;z-index:30;max-width:calc(100% - 32px)}
+.menu{display:flex;flex-direction:column;gap:8px}
+.menu .btn{text-align:left}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brandrow">
+      <h1 class="brand">Stash<span>.</span></h1>
+      <div class="row" style="gap:6px">
+        <span class="count" id="count">0 supplies</span>
+        <button class="menu-btn" id="menuBtn" aria-label="Menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <label class="sr" for="q">Search your supplies</label>
+      <input id="q" type="search" placeholder="Do I already have…?" autocomplete="off">
+    </div>
+    <div class="chips" id="chips" role="toolbar" aria-label="Filter"></div>
+  </header>
+  <main id="main"></main>
+</div>
+
+<button class="fab" id="addBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add supply</button>
+
+<input type="file" id="fileBarcode" accept="image/*" capture="environment" hidden>
+<input type="file" id="fileLabel" accept="image/*" capture="environment" hidden>
+<input type="file" id="filePhoto" accept="image/*" capture="environment" hidden>
+<input type="file" id="fileImport" accept="application/json,.json" hidden>
+<div id="layer"></div>
+
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+(() => {
+/* ---------------- data ---------------- */
+const CATS = [
+  {id:"paint",  label:"Paint",            code:"PT"},
+  {id:"drawing",label:"Drawing",          code:"DR"},
+  {id:"ink",    label:"Pens & markers",   code:"PN"},
+  {id:"paper",  label:"Paper & boards",   code:"PA"},
+  {id:"brush",  label:"Brushes",          code:"BR"},
+  {id:"tools",  label:"Tools",            code:"TL"},
+  {id:"model",  label:"Model & sculpture",code:"MD"},
+  {id:"other",  label:"Other",            code:"OT"},
+];
+const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
+const KEYWORDS = [
+  ["paint",  ["paint","acrylic","oil","gouache","watercolor","watercolour","tempera","primer","gesso","medium","varnish","enamel"]],
+  ["drawing",["pencil","graphite","charcoal","pastel","conte","conté","crayon","eraser","sharpener","willow","vine","stick"]],
+  ["ink",    ["pen","marker","ink","fineliner","micron","pigma","posca","copic","sharpie","brush pen","highlighter","nib"]],
+  ["paper",  ["paper","pad","sketchbook","sketch book","journal","board","bristol","newsprint","vellum","tracing","canvas","illustration board","chipboard pad"]],
+  ["brush",  ["brush","round","flat","filbert","liner","fan"]],
+  ["tools",  ["knife","blade","x-acto","xacto","olfa","cutter","ruler","straightedge","triangle","scissors","tape","glue","adhesive","spray","mat","compass","clip","fixative","bone folder","palette"]],
+  ["model",  ["basswood","balsa","foam","chipboard","clay","plaster","wire","dowel","acrylic sheet","museum board","foam core","foamcore","resin","wax"]],
+];
+const BRANDS = ["Winsor & Newton","Golden","Liquitex","Faber-Castell","Staedtler","Prismacolor","Sakura","Pigma","Micron","Strathmore","Canson","Copic","Posca","General's","Derwent","Caran d'Ache","Holbein","Gamblin","Speedball","X-Acto","Olfa","Arches","Blick","Princeton","Pentel","Uni","Uni-ball","Tombow","Daler-Rowney","Schmincke","Sennelier","Rembrandt","Van Gogh","Royal Talens","Lyra","Koh-i-noor","Conte","Nitram","Grumbacher","Utrecht","M. Graham","Da Vinci","Kuretake","Sharpie","Elmer's","UHU","Krylon","Mod Podge","Bienfang","Fabriano","Hahnemühle","Moleskine","Muji","Stabilo","Zebra","Pilot","Sakura Koi","Molotow","Montana","Grafix","Dahle","Fiskars","Scotch","3M","Loew-Cornell","Silver Brush","Escoda","Raphael","Isabey","Rosemary","Kum","Tombow Mono","Rhodia","Leuchtturm"];
+const DEFAULT_LOCS = ["Studio","Dorm","Bag"];
+
+/* ---------------- storage (IndexedDB, falls back to memory) ---------------- */
+let dbp = null;
+function openDB(){
+  if (dbp) return dbp;
+  dbp = new Promise((resolve) => {
+    try {
+      const r = indexedDB.open("stash", 1);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        if (!d.objectStoreNames.contains("items")) d.createObjectStore("items", {keyPath:"id"});
+        if (!d.objectStoreNames.contains("barcodes")) d.createObjectStore("barcodes", {keyPath:"code"});
+        if (!d.objectStoreNames.contains("meta")) d.createObjectStore("meta", {keyPath:"k"});
+      };
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  });
+  return dbp;
+}
+const mem = {items:new Map(), barcodes:new Map(), meta:new Map()};
+async function tx(store, mode, fn){
+  const d = await openDB();
+  if (!d) return fn(null, mem[store]);
+  return new Promise((resolve, reject) => {
+    try {
+      const t = d.transaction(store, mode); const s = t.objectStore(store);
+      let out; const req = fn(s, null);
+      if (req && "onsuccess" in req) req.onsuccess = () => { out = req.result; };
+      t.oncomplete = () => resolve(out); t.onerror = () => reject(t.error);
+    } catch (e) { resolve(fn(null, mem[store])); }
+  });
+}
+const DB = {
+  all: (store) => tx(store, "readonly", (s, m) => s ? s.getAll() : [...m.values()]),
+  get: (store, key) => tx(store, "readonly", (s, m) => s ? s.get(key) : m.get(key)),
+  put: (store, val) => tx(store, "readwrite", (s, m) => { if (s) return s.put(val); const k = val.id ?? val.code ?? val.k; m.set(k, val); }),
+  del: (store, key) => tx(store, "readwrite", (s, m) => s ? s.delete(key) : m.delete(key)),
+};
+
+/* ---------------- state ---------------- */
+let items = [];
+let locations = [...DEFAULT_LOCS];
+let filter = "all";      // "all" | "low" | category id
+let query = "";
+const urls = new Map();   // item id -> object URL
+
+const $ = (s, r=document) => r.querySelector(s);
+function el(tag, props={}, ...kids){
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(props)) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k.nodeType ? k : document.createTextNode(k));
+  return n;
+}
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+function photoURL(it){
+  if (!it.photo) return null;
+  if (!urls.has(it.id)) urls.set(it.id, URL.createObjectURL(it.photo));
+  return urls.get(it.id);
+}
+function dropURL(id){ if (urls.has(id)) { URL.revokeObjectURL(urls.get(id)); urls.delete(id); } }
+
+function toast(msg){
+  const t = el("div", {class:"toast", role:"status", text:msg});
+  document.body.append(t); setTimeout(() => t.remove(), 2600);
+}
+
+/* ---------------- guessing helpers ---------------- */
+function guessCategory(text){
+  const t = " " + norm(text) + " ";
+  for (const [cat, words] of KEYWORDS) if (words.some(w => t.includes(" " + norm(w) + " ") || t.includes(" " + norm(w)))) return cat;
+  return "other";
+}
+function findBrand(text){
+  const t = norm(text);
+  let best = "";
+  for (const b of BRANDS) { const nb = norm(b); if (nb && t.includes(nb) && nb.length > norm(best).length) best = b; }
+  return best;
+}
+function findDupes(cand, exceptId){
+  const n = norm(cand.name), b = norm(cand.brand);
+  return items.filter(it => it.id !== exceptId && (
+    (cand.barcode && it.barcode === cand.barcode) ||
+    (n && norm(it.name) === n && norm(it.brand) === b)
+  ));
+}
+
+/* ---------------- images ---------------- */
+async function shrink(file, max=720, q=.8){
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+  const s = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(img.src);
+  return new Promise(res => c.toBlob(b => res(b), "image/jpeg", q));
+}
+function pick(input){
+  return new Promise(resolve => {
+    input.value = "";
+    const done = () => { input.removeEventListener("change", done); resolve(input.files && input.files[0] || null); };
+    input.addEventListener("change", done);
+    input.click();
+  });
+}
+
+/* ---------------- barcode ---------------- */
+async function readBarcode(file){
+  // 1) native detector (Chrome / Android)
+  try {
+    if ("BarcodeDetector" in window) {
+      const det = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39"]});
+      const bmp = await createImageBitmap(file);
+      const found = await det.detect(bmp);
+      if (found && found[0]) return found[0].rawValue;
+    }
+  } catch (e) {}
+  // 2) ZXing (iPhone / everything else)
+  if (window.ZXing) {
+    const url = URL.createObjectURL(file);
+    try {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39]);
+      const reader = new ZXing.BrowserMultiFormatReader(hints);
+      const res = await reader.decodeFromImageUrl(url);
+      return res && res.getText();
+    } catch (e) { return null; } finally { URL.revokeObjectURL(url); }
+  }
+  return null;
+}
+async function fetchJSON(url, ms=6000){
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(url, {signal:ctl.signal}); if (!r.ok) return null; return await r.json(); }
+  catch (e) { return null; } finally { clearTimeout(t); }
+}
+async function lookupBarcode(code){
+  // remembered on this phone
+  const local = await DB.get("barcodes", code);
+  if (local) return {name:local.name, brand:local.brand, category:local.category, source:"remembered"};
+  // Open Products Facts (free, open database)
+  const opf = await fetchJSON(`https://world.openproductsfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+  if (opf && opf.status === 1 && opf.product) {
+    const p = opf.product; const name = p.product_name || p.generic_name || "";
+    if (name) return {name, brand:(p.brands || "").split(",")[0].trim(), source:"open database"};
+  }
+  // UPCitemdb free trial (about 100 lookups a day)
+  const upc = await fetchJSON(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+  if (upc && upc.items && upc.items[0]) {
+    const p = upc.items[0];
+    return {name:p.title || "", brand:p.brand || "", source:"product database"};
+  }
+  return null;
+}
+
+/* ---------------- label reading (OCR) ---------------- */
+let tessP = null;
+function loadTesseract(){
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (tessP) return tessP;
+  tessP = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    s.onload = () => res(window.Tesseract); s.onerror = () => { tessP = null; rej(new Error("load")); };
+    document.head.append(s);
+  });
+  return tessP;
+}
+async function readLabel(blob){
+  const T = await loadTesseract();
+  const worker = await T.createWorker("eng");
+  try {
+    const { data } = await worker.recognize(blob);
+    return (data.lines || []).map(l => l.text.replace(/\s+/g, " ").trim())
+      .filter(s => s.length >= 3 && /[a-z]{2}/i.test(s)).slice(0, 12);
+  } finally { await worker.terminate(); }
+}
+
+/* ---------------- rendering ---------------- */
+function visible(){
+  const q = norm(query);
+  return items.filter(it => {
+    if (filter === "low" && !it.low) return false;
+    if (filter !== "all" && filter !== "low" && it.category !== filter) return false;
+    if (!q) return true;
+    const hay = norm([it.name, it.brand, it.color, it.location, it.notes, CAT[it.category]?.label].join(" "));
+    return q.split(" ").every(w => hay.includes(w));
+  }).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+}
+
+function renderChips(){
+  const box = $("#chips"); box.replaceChildren();
+  const lowN = items.filter(i => i.low).length;
+  const mk = (id, label, n, cls="") => el("button", {class:"chip " + cls, "aria-pressed": String(filter === id), onclick:() => { filter = id; render(); }}, label, n != null ? el("span", {class:"n", text:String(n)}) : null);
+  box.append(mk("all", "All", items.length));
+  if (lowN) box.append(mk("low", "Running low", lowN, "low"));
+  for (const c of CATS) { const n = items.filter(i => i.category === c.id).length; if (n) box.append(mk(c.id, c.label, n)); }
+}
+
+function card(it){
+  const ph = el("div", {class:"ph"});
+  const u = photoURL(it);
+  if (u) ph.append(el("img", {src:u, alt:"", loading:"lazy"}));
+  else ph.append(el("span", {class:"code", text:CAT[it.category]?.code || "OT"}));
+  if (it.swatch) { const s = el("i", {class:"sw"}); s.style.background = it.swatch; ph.append(s); }
+  if (it.low) ph.append(el("span", {class:"lowtag", text:"Low"}));
+  if ((it.qty || 1) > 1) ph.append(el("span", {class:"qty", text:"×" + it.qty}));
+  const sub = [it.brand, it.color].filter(Boolean).join(" · ") || CAT[it.category]?.label || "";
+  return el("button", {class:"card", onclick:() => openEditor(it)},
+    ph,
+    el("div", {class:"meta"},
+      el("span", {class:"name", text:it.name || "Untitled supply"}),
+      el("span", {class:"sub", text:sub}),
+      el("span", {class:"where", text:it.location || "—"})));
+}
+
+function render(){
+  const total = items.reduce((a, i) => a + (Number(i.qty) || 1), 0);
+  const lowN = items.filter(i => i.low).length;
+  $("#count").textContent = `${items.length} ${items.length === 1 ? "supply" : "supplies"}` + (lowN ? ` · ${lowN} low` : "");
+  renderChips();
+  const main = $("#main"); main.replaceChildren();
+  if (!items.length) {
+    const sw = el("div", {class:"swatches"});
+    for (const c of ["#2438c9", "#ffc43d", "#c2410c", "#15161a", "#3f8f6b"]) { const i = el("i"); i.style.background = c; sw.append(i); }
+    main.append(el("div", {class:"empty"}, sw,
+      el("h2", {text:"Your supply collection starts here"}),
+      el("p", {text:"Scan a barcode, snap a label, or type it in. Next time you're at the store, search here first."}),
+      el("button", {class:"btn primary", onclick:openAdd, text:"Add your first supply"})));
+    return;
+  }
+  const list = visible();
+  if (!list.length) {
+    main.append(el("div", {class:"empty"},
+      el("h2", {text: query ? "You don't have that yet" : "Nothing here"}),
+      el("p", {text: query ? `No supply matches “${query}”. Safe to buy.` : "Try another filter."}),
+      query ? el("button", {class:"btn", onclick:() => openEditor({name:query}), text:`Add “${query}”`}) : null));
+    return;
+  }
+  const grid = el("div", {class:"grid"});
+  for (const it of list) grid.append(card(it));
+  main.append(grid);
+}
+
+/* ---------------- sheets ---------------- */
+function sheet(content, {onClose}={}){
+  const layer = $("#layer");
+  const box = el("div", {class:"sheet", role:"dialog", "aria-modal":"true"}, el("div", {class:"grab"}), content);
+  const scrim = el("div", {class:"scrim", onclick:(e) => { if (e.target === scrim) close(); }}, box);
+  function close(){ scrim.remove(); document.removeEventListener("keydown", esc); onClose && onClose(); }
+  function esc(e){ if (e.key === "Escape") close(); }
+  document.addEventListener("keydown", esc);
+  layer.append(scrim);
+  const f = box.querySelector("input,button,select,textarea"); if (f) setTimeout(() => f.focus({preventScroll:true}), 60);
+  return {close, box};
+}
+const ICON = {
+  barcode:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6v12M7 6v12M11 6v12M14 6v12M18 6v12M20 6v12"/></svg>',
+  camera:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  pencil:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20l1-5L16 4l4 4L9 19z"/><path d="M14 6l4 4"/></svg>',
+};
+function way(icon, title, desc, fn){
+  const ic = el("span", {class:"ic"}); ic.innerHTML = ICON[icon];
+  return el("button", {class:"way", onclick:fn}, ic, el("span", {}, el("b", {text:title}), el("small", {text:desc})));
+}
+function openAdd(){
+  const s = sheet(el("div", {},
+    el("h3", {text:"Add a supply"}),
+    el("p", {class:"hint", text:"Pick the fastest way for this one."}),
+    el("div", {class:"ways"},
+      way("barcode", "Scan the barcode", "Snap the barcode on the pack. Best for anything store-bought.", () => { s.close(); addByBarcode(); }),
+      way("camera", "Photo of the label", "We read the brand and name off the label for you.", () => { s.close(); addByLabel(); }),
+      way("pencil", "Type it in", "For loose tools, brushes, and anything without a label.", () => { s.close(); openEditor({}); }))));
+}
+
+function busySheet(msg){
+  return sheet(el("div", {class:"busy"}, el("span", {class:"spin"}), el("span", {text:msg})));
+}
+
+async function addByBarcode(){
+  const file = await pick($("#fileBarcode")); if (!file) return;
+  const b = busySheet("Reading the barcode…");
+  const code = await readBarcode(file);
+  if (!code) { b.close(); openEditor({}, {note:"Couldn't read a barcode in that photo. Try again closer and in good light, or fill it in below."}); return; }
+  const owned = items.filter(i => i.barcode === code);
+  b.box.querySelector(".busy span:last-child").textContent = "Looking it up…";
+  const info = await lookupBarcode(code);
+  b.close();
+  const draft = {barcode:code, name:info?.name || "", brand:info?.brand || findBrand(info?.name || ""), category:info?.category || guessCategory((info?.name || "") + " " + (info?.brand || ""))};
+  const note = info ? `Found it (${info.source}). Check the details, then save.` : `Couldn't find barcode ${code} in the product databases. Name it once and Stash will remember it next time.`;
+  openEditor(draft, {note, owned});
+}
+
+async function addByLabel(){
+  const file = await pick($("#fileLabel")); if (!file) return;
+  const photo = await shrink(file);
+  const b = busySheet("Reading the label…");
+  let lines = [];
+  try { lines = await readLabel(file); } catch (e) { lines = null; }
+  b.close();
+  if (lines === null) { openEditor({photo}, {note:"Label reading isn't available right now. Your photo is saved, so just type the name."}); return; }
+  const all = lines.join(" ");
+  const brand = findBrand(all);
+  const nameLine = lines.find(l => norm(l) !== norm(brand) && !norm(l).startsWith(norm(brand) + " ") && l.length > 3) || lines[0] || "";
+  openEditor({photo, brand, name:nameLine, category:guessCategory(all)}, {lines});
+}
+
+/* ---------------- editor ---------------- */
+function openEditor(src, {note, lines, owned}={}){
+  const isNew = !src.id;
+  const it = {qty:1, category:"other", location:locations[0], ...src};
+  let photo = it.photo || null;
+  let qty = Number(it.qty) || 1;
+
+  const photoBox = el("div", {class:"photo"});
+  function drawPhoto(){
+    photoBox.replaceChildren();
+    if (photo) { const u = URL.createObjectURL(photo); const img = el("img", {src:u, alt:"Supply photo"}); img.onload = () => URL.revokeObjectURL(u); photoBox.append(img); }
+    else photoBox.append(el("span", {text:"No photo"}));
+  }
+  drawPhoto();
+
+  const nameI = el("input", {id:"f-name", value:it.name || "", placeholder:"e.g. Cadmium Red Hue, 60ml", required:true, autocomplete:"off"});
+  const brandI = el("input", {id:"f-brand", value:it.brand || "", placeholder:"e.g. Winsor & Newton", list:"brandlist", autocomplete:"off"});
+  const colorI = el("input", {id:"f-color", value:it.color || "", placeholder:"Color / size / grade", autocomplete:"off"});
+  const swI = el("input", {id:"f-sw", type:"color", value:it.swatch || "#8a8a8a", "aria-label":"Swatch"});
+  let useSwatch = !!it.swatch;
+  swI.addEventListener("input", () => { useSwatch = true; });
+  const catS = el("select", {id:"f-cat"}, CATS.map(c => el("option", {value:c.id, selected:c.id === it.category, text:c.label})));
+  const locS = el("select", {id:"f-loc"}, [...locations, "+ New place…"].map(l => el("option", {value:l, selected:l === it.location, text:l})));
+  locS.addEventListener("change", () => {
+    if (locS.value !== "+ New place…") return;
+    newPlaceRow.hidden = false; newPlaceI.focus();
+  });
+  const newPlaceI = el("input", {id:"f-newloc", placeholder:"New place, e.g. Locker"});
+  const newPlaceRow = el("label", {class:"f", hidden:true}, "New place", newPlaceI);
+  function addLocation(name){
+    name = name.trim(); if (!name) return;
+    if (!locations.includes(name)) { locations.push(name); DB.put("meta", {k:"locations", v:locations}); }
+    locS.replaceChildren(...[...locations, "+ New place…"].map(l => el("option", {value:l, selected:l === name, text:l})));
+    newPlaceRow.hidden = true; newPlaceI.value = "";
+  }
+  newPlaceI.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addLocation(newPlaceI.value); } });
+  newPlaceI.addEventListener("blur", () => addLocation(newPlaceI.value));
+
+  const qtyOut = el("output", {text:String(qty)});
+  const stepper = el("div", {class:"stepper"},
+    el("button", {type:"button", "aria-label":"Fewer", onclick:() => { qty = Math.max(1, qty - 1); qtyOut.textContent = qty; }, text:"−"}),
+    qtyOut,
+    el("button", {type:"button", "aria-label":"More", onclick:() => { qty += 1; qtyOut.textContent = qty; }, text:"+"}));
+  const lowI = el("input", {type:"checkbox", id:"f-low", checked:!!it.low});
+  const notesI = el("textarea", {id:"f-notes", rows:2, placeholder:"Anything to remember"}, it.notes || "");
+
+  nameI.addEventListener("blur", () => { if (catS.value === "other") catS.value = guessCategory(nameI.value + " " + brandI.value); });
+
+  // duplicate warning, live
+  const dupeBox = el("div");
+  function checkDupes(){
+    dupeBox.replaceChildren();
+    const d = findDupes({name:nameI.value, brand:brandI.value, barcode:it.barcode}, it.id);
+    if (!d.length) return;
+    const where = d.map(x => `${x.location || "somewhere"}${(x.qty || 1) > 1 ? " ×" + x.qty : ""}`).join(", ");
+    dupeBox.append(el("div", {class:"notice dupe"},
+      el("b", {text:"You already have this."}),
+      el("span", {text:`It's in: ${where}. Still want to add another?`}),
+      el("div", {class:"row"}, el("button", {type:"button", class:"btn small", text:"Just add 1 to it", onclick:async () => {
+        const x = d[0]; x.qty = (Number(x.qty) || 1) + 1; x.updated = Date.now(); await DB.put("items", x); s.close(); render(); toast(`${x.name}: now ×${x.qty}`);
+      }}))));
+  }
+  nameI.addEventListener("input", checkDupes); brandI.addEventListener("input", checkDupes);
+
+  const readBox = lines && lines.length ? el("div", {class:"read"},
+    el("b", {text:"We read this off the label. Tap a line to use it as the name."}),
+    el("div", {class:"lines"}, lines.map(l => el("button", {type:"button", text:l, onclick:() => { nameI.value = l; checkDupes(); }})))) : null;
+
+  const dl = el("datalist", {id:"brandlist"}, BRANDS.map(b => el("option", {value:b})));
+
+  const form = el("form", {class:"edit", onsubmit:save},
+    el("h3", {text:isNew ? "New supply" : "Edit supply"}),
+    note ? el("div", {class:"notice info", text:note}) : null,
+    owned && owned.length ? el("div", {class:"notice dupe"}, el("b", {text:"You already own this."}), el("span", {text:`Scanned before. It's in: ${owned.map(o => o.location).join(", ")}.`})) : null,
+    el("div", {class:"photo-row"}, photoBox, el("div", {class:"photo-actions"},
+      el("button", {type:"button", class:"btn small", text:photo ? "Retake photo" : "Add photo", onclick:async (e) => {
+        const f = await pick($("#filePhoto")); if (!f) return; photo = await shrink(f); drawPhoto(); e.target.textContent = "Retake photo";
+      }}),
+      it.barcode ? el("span", {class:"count", text:"Barcode " + it.barcode}) : null)),
+    readBox,
+    el("label", {class:"f", for:"f-name"}, "Name", nameI),
+    el("div", {class:"two"}, el("label", {class:"f", for:"f-brand"}, "Brand", brandI), el("label", {class:"f", for:"f-color"}, "Color / size", colorI)),
+    el("div", {class:"two"}, el("label", {class:"f", for:"f-cat"}, "Type", catS), el("label", {class:"f", for:"f-loc"}, "Where it lives", locS)),
+    newPlaceRow,
+    el("div", {class:"row", style:"justify-content:space-between"},
+      el("div", {class:"row"}, el("span", {class:"count", text:"How many"}), stepper),
+      el("div", {class:"swatch-row"}, el("span", {class:"count", text:"Swatch"}), swI)),
+    el("label", {class:"toggle", for:"f-low"}, lowI, "Running low, add to shopping list"),
+    el("label", {class:"f", for:"f-notes"}, "Notes", notesI),
+    dupeBox, dl,
+    el("div", {class:"btns"},
+      isNew ? el("button", {type:"button", class:"btn ghost", text:"Cancel", onclick:() => s.close()})
+            : el("button", {type:"button", class:"btn danger", text:"Delete", onclick:delItem}),
+      el("button", {type:"submit", class:"btn primary", text:isNew ? "Save to collection" : "Save"})));
+
+  const s = sheet(form);
+  if (isNew && (it.name || it.barcode)) checkDupes();
+
+  async function delItem(){
+    const b = form.querySelector(".btn.danger");
+    if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Tap again to delete"; return; }
+    await DB.del("items", it.id); dropURL(it.id); items = items.filter(x => x.id !== it.id); s.close(); render(); toast("Deleted");
+  }
+  async function save(e){
+    e.preventDefault();
+    if (locS.value === "+ New place…") addLocation(newPlaceI.value || "Other");
+    const rec = {
+      ...it, id:it.id || uid(), name:nameI.value.trim(), brand:brandI.value.trim(), color:colorI.value.trim(),
+      swatch:useSwatch ? swI.value : "", category:catS.value, location:locS.value, qty, low:lowI.checked,
+      notes:notesI.value.trim(), photo, created:it.created || Date.now(), updated:Date.now(),
+    };
+    if (!rec.name) { nameI.focus(); return; }
+    await DB.put("items", rec); dropURL(rec.id);
+    if (rec.barcode) await DB.put("barcodes", {code:rec.barcode, name:rec.name, brand:rec.brand, category:rec.category});
+    items = items.filter(x => x.id !== rec.id).concat(rec);
+    s.close(); render(); toast(isNew ? "Added to your stash" : "Saved");
+  }
+}
+
+/* ---------------- menu: backup ---------------- */
+function openMenu(){
+  const s = sheet(el("div", {class:"menu"},
+    el("h3", {text:"Your stash"}),
+    el("p", {class:"hint", text:"Everything is saved on this phone only. Back it up now and then."}),
+    el("button", {class:"btn", text:"Back up collection (download file)", onclick:async () => { s.close(); await exportAll(); }}),
+    el("button", {class:"btn", text:"Restore from a backup file", onclick:async () => { s.close(); await importAll(); }}),
+    el("button", {class:"btn ghost", text:"Close", onclick:() => s.close()})));
+}
+const toB64 = (blob) => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(blob); });
+async function exportAll(){
+  const out = [];
+  for (const it of items) out.push({...it, photo: it.photo ? await toB64(it.photo) : null});
+  const blob = new Blob([JSON.stringify({app:"stash", v:1, locations, items:out})], {type:"application/json"});
+  const a = el("a", {href:URL.createObjectURL(blob), download:`stash-backup-${new Date().toISOString().slice(0,10)}.json`});
+  document.body.append(a); a.click(); a.remove();
+  toast("Backup downloaded");
+}
+async function importAll(){
+  const f = await pick($("#fileImport")); if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    for (const raw of data.items || []) {
+      const photo = raw.photo ? await (await fetch(raw.photo)).blob() : null;
+      await DB.put("items", {...raw, photo});
+    }
+    if (Array.isArray(data.locations)) { locations = [...new Set([...locations, ...data.locations])]; await DB.put("meta", {k:"locations", v:locations}); }
+    await load(); toast("Collection restored");
+  } catch (e) { toast("That file couldn't be read"); }
+}
+
+/* ---------------- boot ---------------- */
+async function load(){
+  try { items = await DB.all("items") || []; } catch (e) { items = []; }
+  try { const m = await DB.get("meta", "locations"); if (m && Array.isArray(m.v)) locations = m.v; } catch (e) {}
+  render();
+}
+$("#addBtn").addEventListener("click", openAdd);
+$("#menuBtn").addEventListener("click", openMenu);
+let qt; $("#q").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { query = e.target.value; render(); }, 80); });
+load();
+if ("serviceWorker" in navigator && location.protocol === "https:") { navigator.serviceWorker.register("sw.js").catch(() => {}); }
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+})();
+</script>
+
+</body>
+</html>
